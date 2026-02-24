@@ -102,11 +102,18 @@ class ConverterApp:
         
         self.url_var = tk.StringVar(value="Вставте посилання тут...")
         self.url_var.trace_add("write", lambda *args: self.on_url_change())
-        self.url_entry = tk.Entry(tk_frame, textvariable=self.url_var, font=("Segoe UI", 12), bg="#2a2a2a", fg=TEXT_MAIN, insertbackground=TEXT_MAIN, borderwidth=0, highlightthickness=1, highlightbackground="#3e3e3e")
-        self.url_entry.pack(fill="x", ipady=8, pady=(0, 10))
+        
+        # Контейнер для поля вводу (щоб додати відступ зліва)
+        url_container = tk.Frame(tk_frame, bg="#2a2a2a", borderwidth=1, highlightthickness=0)
+        url_container.pack(fill="x", pady=(0, 10))
+        url_container.config(highlightbackground="#3e3e3e", highlightthickness=1)
+
+        self.url_entry = tk.Entry(url_container, textvariable=self.url_var, font=("Segoe UI", 12), bg="#2a2a2a", fg=TEXT_MAIN, insertbackground=TEXT_MAIN, borderwidth=0)
+        self.url_entry.pack(fill="x", ipady=8, padx=10) # padx=10 дає відступ зліва і справа всередині
+        
         self.url_entry.bind("<FocusIn>", lambda e: self.url_entry.delete(0, tk.END) if "Вставте" in self.url_entry.get() else None)
 
-        tk.Button(tk_frame, text="📋 ВСТАВИТИ З БУФЕРУ", command=self.paste_url, bg="#3e3e3e", fg=TEXT_MAIN, font=("Segoe UI", 9, "bold"), relief="flat", pady=8, cursor="hand2").pack(fill="x")
+        tk.Button(tk_frame, text="� ВСТАВИТИ З БУФЕРУ", command=self.paste_url, bg="#3e3e3e", fg=TEXT_MAIN, font=("Segoe UI", 9, "bold"), relief="flat", pady=8, cursor="hand2").pack(fill="x")
 
         # Local File Section
         file_frame = tk.Frame(container, bg=BG_SURFACE, padx=20, pady=20)
