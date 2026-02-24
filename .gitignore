@@ -1,0 +1,13 @@
+build/
+dist/
+*.spec
+__pycache__/
+*.pyc
+.idea/
+.vscode/
+settings.json
+*.bat
+tk_temp.mp4
+converter_new.exe
+# APPDATA local files
+VideoToMP3Converter/
