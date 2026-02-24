@@ -24,7 +24,7 @@ SETTINGS_FILE = os.path.join(SETTINGS_DIR, 'settings.json')
 
 # --- ОНОВЛЕННЯ ---
 VERSION = "1.0.0"
-UPDATE_URL = "https://raw.githubusercontent.com/USER/REPO/main/version.json" # ЗАМІНІТЬ НА ВАШ URL
+UPDATE_URL = "https://raw.githubusercontent.com/valick18/VideoToMp3/main/version.json"
 
 class MyBarLogger(ProgressBarLogger):
     def __init__(self, progress_callback):
