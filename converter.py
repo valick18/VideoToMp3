@@ -11,19 +11,40 @@ import subprocess
 import sys
 import shutil
 
-# --- ДИЗАЙН ---
-BG_MAIN = "#121212"
-BG_SURFACE = "#1e1e1e"
-ACCENT = "#1db954" 
-TEXT_MAIN = "#ffffff"
-TEXT_DIM = "#b3b3b3"
+
+THEMES = {
+    "dark": {
+        "bg_main": "#121212",
+        "bg_surface": "#1e1e1e",
+        "accent": "#1db954",
+        "text_main": "#ffffff",
+        "text_dim": "#b3b3b3",
+        "entry_bg": "#2a2a2a",
+        "btn_bg": "#3e3e3e",
+        "btn_active": "#333333"
+    },
+    "light": {
+        "bg_main": "#e8e4db",
+        "bg_surface": "#f5f2eb",
+        "accent": "#1db954",
+        "text_main": "#282828",
+        "text_dim": "#6a6a6a",
+        "entry_bg": "#efece6",
+        "btn_bg": "#dbd6ca",
+        "btn_active": "#ccc7ba"
+    }
+}
+CURRENT_THEME = "dark"
+
+def get_color(key):
+    return THEMES[CURRENT_THEME][key]
 
 # Шлях до файлу конфігурації
 SETTINGS_DIR = os.path.join(os.getenv('APPDATA'), 'VideoToMP3Converter')
 SETTINGS_FILE = os.path.join(SETTINGS_DIR, 'settings.json')
 
 # --- ОНОВЛЕННЯ ---
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 UPDATE_URL = "https://raw.githubusercontent.com/valick18/VideoToMp3/main/version.json"
 
 class MyBarLogger(ProgressBarLogger):
@@ -46,12 +67,13 @@ class ConverterApp:
     def __init__(self, root):
         self.root = root
         self.root.title("TikTok & Video to MP3 Converter")
-        self.root.geometry("600x650")
-        self.root.configure(bg=BG_MAIN)
+        self.root.geometry("600x670")
         
         self.video_path = ""
         self.auto_trim = tk.BooleanVar(value=False) # Вимкнено за замовчуванням
         self.last_source = None # "tiktok" або "file"
+        self.mode = "link" # "link" або "file"
+        self.theme = "dark" # Початкова тема
         
         self.load_settings()
         self.setup_ui()
@@ -60,92 +82,149 @@ class ConverterApp:
         self.root.after(1000, self.check_for_updates)
 
     def setup_ui(self):
+        self.theme_colors = THEMES[self.theme]
+        self.root.configure(bg=self.theme_colors["bg_main"])
+        
         style = ttk.Style()
         style.theme_use('clam')
-        style.configure("Horizontal.TProgressbar", thickness=10, troughcolor="#333", background=ACCENT, borderwidth=0)
+        style.configure("Horizontal.TProgressbar", thickness=10, troughcolor="#333", background=self.theme_colors["accent"], borderwidth=0)
         
-        container = tk.Frame(self.root, bg=BG_MAIN, padx=30, pady=30)
-        container.pack(fill="both", expand=True)
+        self.main_container = tk.Frame(self.root, bg=self.theme_colors["bg_main"], padx=30, pady=20)
+        self.main_container.pack(fill="both", expand=True)
 
         # Header
-        header = tk.Frame(container, bg=BG_MAIN)
+        header = tk.Frame(self.main_container, bg=self.theme_colors["bg_main"])
         header.pack(fill="x", pady=(0, 20))
-        tk.Label(header, text="TikTok & Video", font=("Segoe UI", 20, "bold"), bg=BG_MAIN, fg=ACCENT).pack(side="left")
-        tk.Label(header, text=" to MP3", font=("Segoe UI", 20, "bold"), bg=BG_MAIN, fg=TEXT_MAIN).pack(side="left")
-
-        # Кнопка Довідки (?)
-        self.btn_help = tk.Button(header, text="?", command=self.show_help, bg=BG_SURFACE, fg=ACCENT, font=("Segoe UI", 12, "bold"), relief="flat", padx=10, cursor="hand2", activebackground="#333", activeforeground=ACCENT)
-        self.btn_help.pack(side="right")
-
-        # Folder Selection (Prominent)
-        dir_frame = tk.Frame(container, bg=BG_SURFACE, padx=20, pady=15)
-        dir_frame.pack(fill="x", pady=(0, 20))
         
-        tk.Label(dir_frame, text="Папка збереження:", font=("Segoe UI", 9, "bold"), bg=BG_SURFACE, fg=TEXT_DIM).pack(side="left")
-        self.btn_dir = tk.Button(dir_frame, text="📁 ВИБРАТИ ПАПКУ", command=self.select_directory, bg="#3e3e3e", fg=TEXT_MAIN, font=("Segoe UI", 9, "bold"), relief="flat", padx=15, pady=5, cursor="hand2")
+        self.label_title1 = tk.Label(header, text="TikTok & Video", font=("Segoe UI", 20, "bold"), bg=self.theme_colors["bg_main"], fg=self.theme_colors["accent"])
+        self.label_title1.pack(side="left")
+        self.label_title2 = tk.Label(header, text=" to MP3", font=("Segoe UI", 20, "bold"), bg=self.theme_colors["bg_main"], fg=self.theme_colors["text_main"])
+        self.label_title2.pack(side="left")
+
+        # Кнопки в заголовку (Тема та Довідка)
+        header_btns = tk.Frame(header, bg=self.theme_colors["bg_main"])
+        header_btns.pack(side="right")
+
+        # Перемикач теми
+        theme_icon = "☾" if self.theme == "dark" else "☼"
+        theme_fg = self.theme_colors["text_main"] if self.theme == "dark" else self.theme_colors["accent"]
+        self.btn_theme = tk.Button(header_btns, text=theme_icon, command=self.toggle_theme, bg=self.theme_colors["bg_surface"], fg=theme_fg, font=("Segoe UI", 14), relief="flat", width=3, height=1, cursor="hand2", activebackground=self.theme_colors["btn_active"])
+        self.btn_theme.pack(side="left", padx=5)
+
+        help_fg = self.theme_colors["text_main"] if self.theme == "dark" else self.theme_colors["accent"]
+        self.btn_help = tk.Button(header_btns, text="?", command=self.show_help, bg=self.theme_colors["bg_surface"], fg=help_fg, font=("Segoe UI", 14, "bold"), relief="flat", width=3, height=1, cursor="hand2", activebackground=self.theme_colors["btn_active"])
+        self.btn_help.pack(side="left")
+
+        # Folder Selection
+        self.dir_frame = tk.Frame(self.main_container, bg=self.theme_colors["bg_surface"], padx=20, pady=15)
+        self.dir_frame.pack(fill="x", pady=(0, 20))
+        
+        self.label_dir_tag = tk.Label(self.dir_frame, text="Папка збереження:", font=("Segoe UI", 9, "bold"), bg=self.theme_colors["bg_surface"], fg=self.theme_colors["text_dim"])
+        self.label_dir_tag.pack(side="left")
+        self.btn_dir = tk.Button(self.dir_frame, text="📂 ВИБРАТИ ПАПКУ", command=self.select_directory, bg=self.theme_colors["btn_bg"], fg=self.theme_colors["text_main"], font=("Segoe UI", 10, "bold"), relief="flat", padx=15, pady=8, cursor="hand2")
         self.btn_dir.pack(side="right")
         
-        self.label_dir_path = tk.Label(dir_frame, text=self.output_dir, bg=BG_SURFACE, fg=ACCENT, font=("Segoe UI", 9, "italic"))
+        self.label_dir_path = tk.Label(self.dir_frame, text=self.output_dir, bg=self.theme_colors["bg_surface"], fg=self.theme_colors["accent"], font=("Segoe UI", 9, "italic"))
         self.label_dir_path.pack(side="left", padx=10)
 
+        # Перемикач режимів (Link vs File)
+        self.mode_frame = tk.Frame(self.main_container, bg=self.theme_colors["bg_main"])
+        self.mode_frame.pack(fill="x", pady=(0, 15))
+        
+        self.btn_mode_link = tk.Button(self.mode_frame, text="🔗 ПОСИЛАННЯ", command=lambda: self.switch_mode("link"), bg=self.theme_colors["accent"], fg="#000", font=("Segoe UI", 10, "bold"), relief="flat", padx=20, pady=10, cursor="hand2")
+        self.btn_mode_link.pack(side="left", expand=True, fill="x", padx=(0, 5))
+        
+        self.btn_mode_file = tk.Button(self.mode_frame, text="📂 ЛОКАЛЬНИЙ ФАЙЛ", command=lambda: self.switch_mode("file"), bg=self.theme_colors["btn_bg"], fg=self.theme_colors["text_main"], font=("Segoe UI", 10, "bold"), relief="flat", padx=20, pady=10, cursor="hand2")
+        self.btn_mode_file.pack(side="left", expand=True, fill="x", padx=(5, 0))
+
         # TikTok Section
-        tk_frame = tk.Frame(container, bg=BG_SURFACE, padx=20, pady=20)
-        tk_frame.pack(fill="x", pady=(0, 20))
+        self.tk_frame = tk.Frame(self.main_container, bg=self.theme_colors["bg_surface"], padx=20, pady=20)
+        self.tk_frame.pack(fill="x", pady=(0, 20))
         
-        tk_header = tk.Frame(tk_frame, bg=BG_SURFACE)
+        tk_header = tk.Frame(self.tk_frame, bg=self.theme_colors["bg_surface"])
         tk_header.pack(fill="x", pady=(0, 10))
-        tk.Label(tk_header, text="TikTok Посилання", font=("Segoe UI", 10, "bold"), bg=BG_SURFACE, fg=TEXT_DIM).pack(side="left")
+        self.label_tk_tag = tk.Label(tk_header, text="TikTok, YouTube, Instagram посилання", font=("Segoe UI", 10, "bold"), bg=self.theme_colors["bg_surface"], fg=self.theme_colors["text_dim"])
+        self.label_tk_tag.pack(side="left")
         
-        # Кнопка очищення (Червоний хрестик)
-        self.btn_clear = tk.Button(tk_header, text="✕ ОЧИСТИТИ", command=self.clear_url, bg=BG_SURFACE, fg="#ff4444", font=("Segoe UI", 8, "bold"), relief="flat", padx=5, cursor="hand2")
-        self.btn_clear.pack(side="right")
+        # Кнопка очищення
+        self.btn_clear = tk.Button(tk_header, text="✕ ОЧИСТИТИ", command=self.clear_url, bg=self.theme_colors["bg_surface"], fg="#ff4444", font=("Segoe UI", 8, "bold"), relief="flat", padx=5, cursor="hand2")
+        # self.btn_clear.pack(side="right") # Ховається за замовчуванням
         
         self.url_var = tk.StringVar(value="Вставте посилання тут...")
         self.url_var.trace_add("write", lambda *args: self.on_url_change())
         
-        # Контейнер для поля вводу (щоб додати відступ зліва)
-        url_container = tk.Frame(tk_frame, bg="#2a2a2a", borderwidth=1, highlightthickness=0)
-        url_container.pack(fill="x", pady=(0, 10))
-        url_container.config(highlightbackground="#3e3e3e", highlightthickness=1)
+        self.url_container = tk.Frame(self.tk_frame, bg=self.theme_colors["entry_bg"], borderwidth=1, highlightthickness=0)
+        self.url_container.pack(fill="x", pady=(0, 10))
+        self.url_container.config(highlightbackground=self.theme_colors["btn_bg"], highlightthickness=1)
 
-        self.url_entry = tk.Entry(url_container, textvariable=self.url_var, font=("Segoe UI", 12), bg="#2a2a2a", fg=TEXT_MAIN, insertbackground=TEXT_MAIN, borderwidth=0)
-        self.url_entry.pack(fill="x", ipady=8, padx=10) # padx=10 дає відступ зліва і справа всередині
-        
+        # ПАКУЄМО СНАЧАЛА КНОПКУ СПРАВА, ПОТІМ ПОЛЕ
+        self.btn_paste = tk.Button(self.url_container, text="📋", command=self.paste_url, bg=self.theme_colors["entry_bg"], fg=self.theme_colors["text_main"], font=("Segoe UI", 14), relief="flat", padx=10, cursor="hand2", activebackground=self.theme_colors["btn_active"])
+        self.btn_paste.pack(side="right")
+
+        self.url_entry = tk.Entry(self.url_container, textvariable=self.url_var, font=("Segoe UI", 12), bg=self.theme_colors["entry_bg"], fg=self.theme_colors["text_main"], insertbackground=self.theme_colors["text_main"], borderwidth=0)
+        self.url_entry.pack(side="left", fill="x", expand=True, ipady=8, padx=(15, 0)) # Прибираємо padx справа
         self.url_entry.bind("<FocusIn>", lambda e: self.url_entry.delete(0, tk.END) if "Вставте" in self.url_entry.get() else None)
 
-        tk.Button(tk_frame, text="� ВСТАВИТИ З БУФЕРУ", command=self.paste_url, bg="#3e3e3e", fg=TEXT_MAIN, font=("Segoe UI", 9, "bold"), relief="flat", pady=8, cursor="hand2").pack(fill="x")
-
         # Local File Section
-        file_frame = tk.Frame(container, bg=BG_SURFACE, padx=20, pady=20)
-        file_frame.pack(fill="x", pady=(0, 20))
+        self.file_frame = tk.Frame(self.main_container, bg=self.theme_colors["bg_surface"], padx=20, pady=20)
+        self.file_frame.pack(fill="x", pady=(0, 20))
         
-        self.btn_select = tk.Button(file_frame, text="📂 ВИБРАТИ ФАЙЛ НА ПК", command=self.select_video, bg="#3e3e3e", fg=TEXT_MAIN, font=("Segoe UI", 10, "bold"), relief="flat", pady=10, cursor="hand2")
+        self.btn_select = tk.Button(self.file_frame, text="📂 ВИБРАТИ ФАЙЛ НА ПК", command=self.select_video, bg=self.theme_colors["btn_bg"], fg=self.theme_colors["text_main"], font=("Segoe UI", 11, "bold"), relief="flat", pady=10, cursor="hand2")
         self.btn_select.pack(fill="x")
-        self.label_file = tk.Label(file_frame, text="Файл не вибрано", bg=BG_SURFACE, fg=TEXT_DIM, font=("Segoe UI", 9, "italic"))
+        self.label_file = tk.Label(self.file_frame, text="Файл не вибрано", bg=self.theme_colors["bg_surface"], fg=self.theme_colors["text_dim"], font=("Segoe UI", 9, "italic"))
         self.label_file.pack(pady=(5, 0))
 
         # Trim Settings
-        trim_frame = tk.Frame(container, bg=BG_SURFACE, padx=20, pady=15)
-        trim_frame.pack(fill="x", pady=(0, 30))
+        self.trim_frame = tk.Frame(self.main_container, bg=self.theme_colors["bg_surface"], padx=20, pady=15)
+        self.trim_frame.pack(fill="x", pady=(0, 30))
         
-        self.cb_trim = tk.Checkbutton(trim_frame, text="Авто-обрізка заставки в кінці:", variable=self.auto_trim, bg=BG_SURFACE, fg=TEXT_MAIN, selectcolor="#000", activebackground=BG_SURFACE, activeforeground=ACCENT, font=("Segoe UI", 10), cursor="hand2")
+        self.cb_trim = tk.Checkbutton(self.trim_frame, text="Авто-обрізка кінця аудіофайла:", variable=self.auto_trim, bg=self.theme_colors["bg_surface"], fg=self.theme_colors["text_main"], selectcolor="#000" if self.theme == "dark" else "#fff", activebackground=self.theme_colors["bg_surface"], activeforeground=self.theme_colors["accent"], font=("Segoe UI", 10), cursor="hand2")
         self.cb_trim.pack(side="left")
 
-        self.trim_entry = tk.Entry(trim_frame, width=4, font=("Segoe UI", 10, "bold"), bg="#2a2a2a", fg=ACCENT, borderwidth=0, highlightthickness=1, highlightbackground="#3e3e3e", justify="center")
+        self.trim_entry = tk.Entry(self.trim_frame, width=4, font=("Segoe UI", 10, "bold"), bg=self.theme_colors["entry_bg"], fg=self.theme_colors["accent"], borderwidth=0, highlightthickness=1, highlightbackground=self.theme_colors["btn_bg"], justify="center")
         self.trim_entry.pack(side="left", padx=10)
         self.trim_entry.insert(0, "3.0")
-        tk.Label(trim_frame, text="сек.", bg=BG_SURFACE, fg=TEXT_DIM, font=("Segoe UI", 10)).pack(side="left")
+        self.label_sec = tk.Label(self.trim_frame, text="сек.", bg=self.theme_colors["bg_surface"], fg=self.theme_colors["text_dim"], font=("Segoe UI", 10))
+        self.label_sec.pack(side="left")
 
         # Convert Button
-        self.btn_convert = tk.Button(container, text="🔥 КОНВЕРТУВАТИ В MP3", command=self.start_conversion, bg=ACCENT, fg="#000", font=("Segoe UI", 16, "bold"), relief="flat", pady=18, cursor="hand2", activebackground="#1ed760")
+        self.btn_convert = tk.Button(self.main_container, text="🔥 КОНВЕРТУВАТИ В MP3", command=self.start_conversion, bg=self.theme_colors["accent"], fg="#000" if self.theme == "dark" else "#fff", font=("Segoe UI", 16, "bold"), relief="flat", pady=18, cursor="hand2", activebackground="#1ed760")
         self.btn_convert.pack(fill="x")
 
         # Progress & Status
-        self.progress_bar = ttk.Progressbar(container, style="Horizontal.TProgressbar", mode="determinate")
+        self.progress_bar = ttk.Progressbar(self.main_container, style="Horizontal.TProgressbar", mode="determinate")
         self.progress_bar.pack(fill="x", pady=(20, 5))
         
-        self.status_label = tk.Label(container, text="Готово до роботи", font=("Segoe UI", 9), bg=BG_MAIN, fg="#555")
+        self.status_label = tk.Label(self.main_container, text="Готово до роботи", font=("Segoe UI", 9), bg=self.theme_colors["bg_main"], fg=self.theme_colors["text_dim"])
         self.status_label.pack()
+
+        # Початковий стан режимів
+        self.switch_mode("link")
+
+    def switch_mode(self, mode):
+        self.mode = mode
+        if mode == "link":
+            self.tk_frame.pack(fill="x", pady=(0, 20), after=self.mode_frame)
+            self.file_frame.pack_forget()
+            self.btn_mode_link.config(bg=self.theme_colors["accent"], fg="#000")
+            self.btn_mode_file.config(bg=self.theme_colors["btn_bg"], fg=self.theme_colors["text_main"])
+        else:
+            self.file_frame.pack(fill="x", pady=(0, 20), after=self.mode_frame)
+            self.tk_frame.pack_forget()
+            self.btn_mode_file.config(bg=self.theme_colors["accent"], fg="#000")
+            self.btn_mode_link.config(bg=self.theme_colors["btn_bg"], fg=self.theme_colors["text_main"])
+
+    def toggle_theme(self):
+        self.theme = "light" if self.theme == "dark" else "dark"
+        self.save_settings()
+        # Повне оновлення UI
+        for widget in self.root.winfo_children():
+            widget.destroy()
+        self.setup_ui()
+        # Повертаємо посилання на папку та файл
+        self.label_dir_path.config(text=self.output_dir)
+        if self.video_path:
+            self.label_file.config(text=os.path.basename(self.video_path), fg=self.theme_colors["accent"])
 
     def load_settings(self):
         default_dir = os.path.join(os.path.expanduser("~"), "Desktop")
@@ -157,13 +236,14 @@ class ConverterApp:
                     saved_dir = settings.get('output_dir')
                     if saved_dir and os.path.exists(saved_dir):
                         self.output_dir = saved_dir
+                    self.theme = settings.get('theme', 'dark')
             except: pass
 
     def save_settings(self):
         try:
             os.makedirs(SETTINGS_DIR, exist_ok=True)
             with open(SETTINGS_FILE, 'w', encoding='utf-8') as f:
-                json.dump({'output_dir': self.output_dir}, f, ensure_ascii=False, indent=4)
+                json.dump({'output_dir': self.output_dir, 'theme': self.theme}, f, ensure_ascii=False, indent=4)
         except: pass
 
     def select_directory(self):
@@ -178,23 +258,29 @@ class ConverterApp:
         if path:
             self.video_path = path
             self.last_source = "file"
-            self.label_file.config(text=os.path.basename(path), fg=ACCENT)
+            self.label_file.config(text=os.path.basename(path), fg=self.theme_colors["accent"])
             # Якщо є посилання, натякаємо що зараз пріоритет у файлу
             if self.url_var.get() and "Вставте" not in self.url_var.get():
-                self.status_label.config(text="Пріоритет: Локальний файл", fg=ACCENT)
+                self.status_label.config(text="Пріоритет: Локальний файл", fg=self.theme_colors["accent"])
 
     def clear_url(self):
         self.url_var.set("")
         if self.last_source == "tiktok":
             self.last_source = "file" if self.video_path else None
-        self.status_label.config(text="Посилання видалено", fg=TEXT_DIM)
+        self.status_label.config(text="Посилання видалено", fg=self.theme_colors["text_dim"])
+        self.btn_clear.pack_forget() # Ховаємо кнопку після очищення
 
     def on_url_change(self):
-        val = self.url_var.get()
-        if val and "Вставте" not in val and val.strip() != "":
+        val = self.url_var.get().strip()
+        if val and "Вставте" not in val and val != "":
             self.last_source = "tiktok"
             if self.video_path:
-                self.status_label.config(text="Пріоритет: TikTok посилання", fg=ACCENT)
+                self.status_label.config(text="Пріоритет: TikTok посилання", fg=self.theme_colors["accent"])
+            # Показуємо кнопку очищення
+            self.btn_clear.pack(side="right")
+        else:
+            # Ховаємо кнопку очищення, якщо поле порожнє або містить плейсхолдер
+            self.btn_clear.pack_forget()
 
     def paste_url(self):
         try:
@@ -206,24 +292,23 @@ class ConverterApp:
 
     def start_conversion(self):
         url = self.url_var.get().strip()
-        is_tiktok_url = url.startswith("http") and "tiktok" in url.lower()
+        is_tiktok_url = url.startswith("http")
         
-        # Визначаємо пріоритет
+        # Визначаємо пріоритет на основі обраного режиму
         use_tiktok = False
-        if self.last_source == "tiktok" and is_tiktok_url:
+        if self.mode == "link":
+            if not is_tiktok_url or "Вставте" in url:
+                messagebox.showwarning("Помилка", "Вставте коректне посилання!")
+                return
             use_tiktok = True
-        elif self.last_source == "file" and self.video_path:
-            use_tiktok = False
-        elif is_tiktok_url: # Фоллбек якщо last_source не стабільно спрацював
-            use_tiktok = True
-        elif self.video_path:
-            use_tiktok = False
         else:
-            messagebox.showwarning("Помилка", "Виберіть файл або вставте посилання на TikTok!")
-            return
+            if not self.video_path:
+                messagebox.showwarning("Помилка", "Виберіть файл на комп'ютері!")
+                return
+            use_tiktok = False
             
         self.btn_convert.config(state="disabled", bg="#333")
-        self.status_label.config(text="Запуск процесу...", fg=ACCENT)
+        self.status_label.config(text="Запуск процесу...", fg=self.theme_colors["accent"])
         self.progress_bar["value"] = 0
         
         threading.Thread(target=self._process_logic, args=(use_tiktok, url), daemon=True).start()
@@ -289,27 +374,48 @@ class ConverterApp:
         self.root.after(0, lambda: self.progress_bar.config(value=val))
 
     def _finish(self, success, msg):
-        self.btn_convert.config(state="normal", bg=ACCENT)
+        self.btn_convert.config(state="normal", bg=self.theme_colors["accent"])
         if success:
             file_name = os.path.basename(msg)
-            self.status_label.config(text=f"ЗБЕРЕЖЕНО: {file_name}", fg=ACCENT)
+            self.status_label.config(text=f"ЗБЕРЕЖЕНО: {file_name}", fg=self.theme_colors["accent"])
             messagebox.showinfo("Успіх", f"Збережено:\n{msg}")
         else:
             self.status_label.config(text="ПОМИЛКА ОБРОБКИ", fg="#ff4444")
             messagebox.showerror("Помилка", msg)
 
     def show_help(self):
+        help_window = tk.Toplevel(self.root)
+        help_window.title("Довідка та Інструкція")
+        help_window.geometry("520x600")
+        help_window.configure(bg=self.theme_colors["bg_surface"])
+        help_window.resizable(False, False)
+        help_window.transient(self.root) # Поверх головного вікна
+        help_window.grab_set() # Блокує взаємодію з головним вікном
+        
+        # Центрування відносно головного вікна
+        self.root.update_idletasks()
+        x = self.root.winfo_x() + (self.root.winfo_width() // 2) - 260
+        y = self.root.winfo_y() + (self.root.winfo_height() // 2) - 300
+        help_window.geometry(f"+{x}+{y}")
+
+        content = tk.Frame(help_window, bg=self.theme_colors["bg_surface"], padx=30, pady=30)
+        content.pack(fill="both", expand=True)
+
+        tk.Label(content, text="📖 ІНСТРУКЦІЯ ТА МОЖЛИВОСТІ", font=("Segoe UI", 14, "bold"), bg=self.theme_colors["bg_surface"], fg=self.theme_colors["accent"]).pack(pady=(0, 20))
+
         help_text = (
-            "📖 ЯК КОРИСТУВАТИСЬ ПРОГРАМОЮ:\n\n"
-            "1. Виберіть папку для збереження (за замовчуванням — Робочий стіл).\n"
-            "2. Вставте посилання або виберіть файл на комп'ютері.\n"
-            "   💡 Можна використовувати НЕ ТІЛЬКИ TikTok, а й YouTube, Instagram та багато інших сайтів!\n"
-            "3. Налаштуйте авто-обрізку (якщо потрібно прибрати заставку в кінці).\n"
-            "4. Натисніть 'КОНВЕРТУВАТИ В MP3' та дочекайтеся завершення.\n\n"
+            "🔗 ПОСИЛАННЯ: Вставте лінк (TikTok, YT, Insta) та тисніть 'Конвертувати'.\n\n"
+            "📂 ФАЙЛ: Оберіть відео на ПК та тисніть 'Конвертувати'.\n\n"
+            "⚙️ ОПЦІЇ: Авто-обрізка аудіо та зміна папки зверху.\n\n"
+            "🌓 ТЕМА: Кнопка ☾/☼ для перемикання кольорів.\n\n"
             "--------------------------------------------------\n"
-            "🌟 Програма розроблена персонально для Олега Сотника"
+            "🌟 Спеціально розроблено для Олега Сотника"
         )
-        messagebox.showinfo("Довідка та Інструкція", help_text)
+        
+        desc = tk.Label(content, text=help_text, font=("Segoe UI", 11), bg=self.theme_colors["bg_surface"], fg=self.theme_colors["text_main"], justify="left", wraplength=460)
+        desc.pack(fill="both", expand=True)
+
+        tk.Button(content, text="ЗАКРИТИ", command=help_window.destroy, bg=self.theme_colors["accent"], fg="#000", font=("Segoe UI", 10, "bold"), relief="flat", pady=10, cursor="hand2", activebackground="#1ed760").pack(fill="x", pady=(20, 0))
 
     def check_for_updates(self):
         """Перевіряє наявність нової версії на сервері."""
@@ -336,7 +442,7 @@ class ConverterApp:
 
     def _start_update_download(self, url):
         """Завантажує нову версію в окремому потоці."""
-        self.status_label.config(text="Завантаження оновлення...", fg=ACCENT)
+        self.status_label.config(text="Завантаження оновлення...", fg=self.theme_colors["accent"])
         self.btn_convert.config(state="disabled")
 
         def _download():
